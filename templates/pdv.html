@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>PDV - THE RUA BURGUER</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet"/>
+  <style>
+    body { background:#121212; color:#fff; padding:18px; font-family: 'Segoe UI', Tahoma, sans-serif; }
+    .card { background:#1f1f1f; border:1px solid #333; border-radius:10px; }
+    .product-card { cursor:pointer; transition:0.12s; border:2px solid transparent; height:100%; color: #fff; }
+    .product-card:hover { transform:scale(1.02); border-color:#ffcc00; }
+    .btn-custom { background:#ffcc00; color:#000; font-weight:700; }
+    .btn-custom:hover { background:#ffdb4d; }
+    .cart-item { background:#222; border-left:4px solid #ffcc00; padding:10px; margin-bottom:8px; border-radius:6px; color: #fff; }
+    .total-display { font-size:1.6rem; color:#ffcc00; font-weight:700; }
+    .scrollable { max-height:62vh; overflow:auto; }
+    .small-muted { color:#bbb; font-size:0.9rem; }
+    #cashBanner { font-weight:600; }
+  </style>
+</head>
+<body>
+  <div class="container-fluid">
+    <div class="row g-3">
+      <!-- left: produtos -->
+      <div class="col-lg-8">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h2>PDV - THE RUA BURGUER</h2>
+          <div id="cashBanner" class="small-muted">Verificando caixa...</div>
+        </div>
+
+        <div class="card p-3 mb-3">
+          <div class="row g-2">
+            <div class="col-md-6">
+              <input id="searchProduct" class="form-control" placeholder="Buscar produto..." />
+            </div>
+            <div class="col-md-3">
+              <select id="filterCategory" class="form-select">
+                <option value="">Todas categorias</option>
+              </select>
+            </div>
+            <div class="col-md-3 text-end">
+              <button id="btnRefresh" class="btn btn-outline-light">Atualizar</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="productsGrid" class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3 scrollable"></div>
+      </div>
+
+      <!-- right: carrinho/pagamento -->
+      <div class="col-lg-4">
+        <div class="card p-3 sticky-top" style="top:18px;">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h5>Pedido <span id="cartCount" class="badge bg-warning text-dark">0</span></h5>
+            <button id="btnCashAction" class="btn btn-sm btn-outline-light">Abrir Caixa</button>
+          </div>
+
+          <div id="cartItems" class="mb-3" style="max-height:36vh; overflow:auto;"></div>
+
+          <div class="mb-3">
+            <label class="form-label small-muted">Nome do cliente</label>
+            <input id="clientName" class="form-control" placeholder="Nome (opcional)">
+          </div>
+
+          <div class="mb-2 d-flex gap-2">
+            <select id="orderType" class="form-select">
+              <option value="local">Comer no local</option>
+              <option value="retirada">Retirada</option>
+              <option value="entrega">Entrega</option>
+            </select>
+            <input id="qtyDefault" type="number" min="1" value="1" class="form-control" placeholder="Qtd padrão" style="max-width:110px">
+          </div>
+
+          <div id="addressBlock" style="display:none;" class="mb-2">
+            <input id="clientAddress" class="form-control mb-2" placeholder="Endereço (entrega)"/>
+            <input id="clientPhone" class="form-control" placeholder="Telefone"/>
+          </div>
+
+          <div class="mb-2">
+            <textarea id="clientNote" class="form-control" rows="2" placeholder="Observação (aparece na comanda)"></textarea>
+          </div>
+
+          <hr style="border-color:#2a2a2a"/>
+
+          <div class="mb-2">
+            <label class="form-label small-muted">Forma de pagamento</label>
+            <select id="paymentType" class="form-select">
+              <option value="dinheiro">Dinheiro</option>
+              <option value="pix">PIX</option>
+              <option value="cartao">Cartão</option>
+            </select>
+          </div>
+
+          <div id="cashBlock" style="display:none;">
+            <label class="form-label small-muted">Valor recebido</label>
+            <input id="cashReceived" type="number" step="0.01" class="form-control" placeholder="Valor entregue pelo cliente">
+            <div id="changeInfo" class="mt-1 small-muted"></div>
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center mt-3">
+            <div>
+              <div class="small-muted">Total</div>
+              <div class="total-display" id="totalAmount">R$ 0.00</div>
+            </div>
+            <div class="text-end">
+              <button id="btnPrint" class="btn btn-outline-light mb-2" disabled>Imprimir Comanda</button>
+              <button id="btnFinalize" class="btn btn-custom btn-lg" disabled>Finalizar Venda</button>
+              <button id="btnClear" class="btn btn-sm btn-outline-danger mt-2">Limpar</button>
+            </div>
+          </div>
+
+          <div class="mt-3 small-muted">
+            <div>Obs: PDV funciona somente com caixa aberto.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Customização -->
+  <div class="modal fade" id="customModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content bg-dark text-white">
+        <div class="modal-header border-0">
+          <h5 id="modalTitle" class="modal-title">Customizar</h5>
+          <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body" id="modalBody"></div>
+        <div class="modal-footer border-0">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button id="modalAdd" class="btn btn-custom">Adicionar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    const API = '/api';
+    let products = [], extras = [], cart = [];
+    const modal = new bootstrap.Modal(document.getElementById('customModal'));
+    let currentProduct = null, editingIndex = null, cashOpenState = false, lastOrderId = null;
+    let cashUpdateInterval = null;
+
+    const money = v => parseFloat(v||0).toFixed(2);
+    function escapeId(s) { 
+      return (s && typeof s === 'string') ? s.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_\-]/g,'') : 'unknown'; 
+    }
+
+    window.addEventListener('load', async () => {
+      await loadProducts();
+      await loadExtras();
+      await checkCashStatus();
+      bindUI();
+    });
+
+    function bindUI(){
+      ['searchProduct', 'filterCategory'].forEach(id => {
+        document.getElementById(id)?.addEventListener('input', renderProducts);
+      });
+      document.getElementById('orderType').addEventListener('change', onOrderTypeChange);
+      document.getElementById('paymentType').addEventListener('change', onPaymentChange);
+      document.getElementById('cashReceived').addEventListener('input', updateChange);
+      document.getElementById('btnRefresh').addEventListener('click', async () => {
+        await loadProducts(); await loadExtras();
+      });
+      document.getElementById('modalAdd').addEventListener('click', addModalToCart);
+      document.getElementById('btnClear').addEventListener('click', clearCart);
+      document.getElementById('btnFinalize').addEventListener('click', finalizeSale);
+      document.getElementById('btnPrint').addEventListener('click', printComanda);
+      document.getElementById('btnCashAction').addEventListener('click', handleCashAction);
+    }
+
+    async function checkCashStatus(){
+      const banner = document.getElementById('cashBanner');
+      banner.innerHTML = '<span class="text-warning">Verificando caixa...</span>';
+
+      let attempts = 0;
+      const maxAttempts = 5;
+
+      while(attempts < maxAttempts){
+        try{
+          const res = await fetch(`${API}/cash/status`, { cache: 'no-store' });
+          if(!res.ok) throw new Error(`HTTP ${res.status}`);
+          const js = await res.json();
+
+          if(js.success !== true) throw new Error(js.message || 'Erro');
+
+          cashOpenState = js.is_open;
+          updateCashBanner(js);
+          updateCashButton(js);
+          togglePDVEnabled(cashOpenState);
+
+          if(cashUpdateInterval) clearInterval(cashUpdateInterval);
+
+          if(cashOpenState){
+            await updateCashReport();
+            cashUpdateInterval = setInterval(updateCashReport, 3000);
+          } else {
+            banner.innerHTML = 'Caixa fechado — abra para vender';
+            banner.style.color = '#f2a1a1';
+          }
+          return;
+
+        }catch(e){
+          attempts++;
+          console.warn(`Tentativa ${attempts}/${maxAttempts}:`, e);
+          banner.innerHTML = `<span class="text-danger">Erro (${attempts})</span>`;
+          await new Promise(r => setTimeout(r, 2000));
+        }
+      }
+
+      banner.innerHTML = '<span class="text-danger">Servidor offline</span>';
+      cashOpenState = false;
+      togglePDVEnabled(false);
+    }
+
+    async function updateCashReport(){
+      try{
+        const res = await fetch(`${API}/cash/report`, { cache: 'no-store' });
+        if (!res.ok) return;
+        const js = await res.json();
+        if(js.success && js.report){
+          const r = js.report;
+          const b = r.payment_breakdown;
+          const cashId = js.cash?.id || '?';
+          document.getElementById('cashBanner').innerHTML = `
+            Caixa aberto (ID ${cashId}) 
+            <span class="ms-3 small text-warning">
+              R$ ${money(b.dinheiro)} | P R$ ${money(b.pix)} | C R$ ${money(b.cartao)} 
+              → Total: R$ ${money(r.total_sales)}
+            </span>
+          `;
+        }
+      }catch(e){}
+    }
+
+    function updateCashBanner(js){
+      const b = document.getElementById('cashBanner');
+      if(js && js.success && js.is_open){
+        b.innerHTML = `Caixa aberto (ID ${js.cash?.id || '?'}) <span class="ms-3 small text-warning">carregando...</span>`;
+        b.style.color = '#8fd19e';
+      } else {
+        b.innerHTML = 'Caixa fechado — abra para vender';
+        b.style.color = '#f2a1a1';
+      }
+    }
+
+    function updateCashButton(js){
+      const btn = document.getElementById('btnCashAction');
+      if(js && js.is_open){
+        btn.innerText = 'Fechar Caixa';
+      } else {
+        btn.innerText = 'Abrir Caixa';
+      }
+    }
+
+    function togglePDVEnabled(enabled){
+      document.querySelectorAll('.product-card').forEach(b => b.style.pointerEvents = enabled ? 'auto' : 'none');
+      document.getElementById('btnFinalize').disabled = !enabled || cart.length===0;
+      document.getElementById('btnPrint').disabled = !lastOrderId;
+    }
+
+    function handleCashAction(){
+      if(cashOpenState){
+        closeCash();
+      } else {
+        openCashPrompt();
+      }
+    }
+
+    async function openCashPrompt(){
+      const v = prompt('Valor inicial (R$):', '0.00');
+      if (!v) return;
+      const val = parseFloat(v.replace(',','.')) || 0;
+      try{
+        const res = await fetch(`${API}/cash/open`, { 
+          method:'POST', 
+          headers:{'Content-Type':'application/json'}, 
+          body: JSON.stringify({ opening_amount: val }) 
+        });
+        const js = await res.json();
+        if(js.success){ 
+          alert('Caixa aberto!'); 
+          await checkCashStatus(); 
+        } else {
+          alert('Erro: ' + (js.message || ''));
+        }
+      }catch(e){ 
+        alert('Erro ao abrir caixa'); 
+      }
+    }
+
+    async function closeCash(){
+      if(!confirm('Fechar caixa agora?')) return;
+
+      try{
+        const res = await fetch(`${API}/cash/report`);
+        const js = await res.json();
+        if(!js.success) throw new Error(js.message || 'Erro');
+
+        const r = js.report;
+        const b = r.payment_breakdown;
+
+        const input = prompt(
+          `=== FECHAMENTO DE CAIXA ===\n\n` +
+          `Dinheiro: R$ ${money(b.dinheiro)}\n` +
+          `PIX:      R$ ${money(b.pix)}\n` +
+          `Cartão:   R$ ${money(b.cartao)}\n\n` +
+          `Total vendas: R$ ${money(r.total_sales)}\n` +
+          `Esperado:     R$ ${money(r.expected)}\n\n` +
+          `Digite o valor real em caixa:`,
+          money(r.expected)
+        );
+        if(input === null) return;
+
+        const closing_amount = parseFloat(input.replace(',','.')) || 0;
+
+        const closeRes = await fetch(`${API}/cash/close`, { 
+          method:'POST', 
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ closing_amount })
+        });
+        const closeJs = await closeRes.json();
+
+        if(closeJs.success){
+          const diff = closing_amount - r.expected;
+          alert(
+            `CAIXA FECHADO!\n\n` +
+            `Dinheiro: R$ ${money(b.dinheiro)}\n` +
+            `PIX:      R$ ${money(b.pix)}\n` +
+            `Cartão:   R$ ${money(b.cartao)}\n\n` +
+            `Total: R$ ${money(r.total_sales)}\n` +
+            `Em caixa: R$ ${money(closing_amount)}\n` +
+            `Diferença: R$ ${money(diff)} ${diff > 0 ? '[SOBRA]' : diff < 0 ? '[FALTA]' : ''}`
+          );
+          await checkCashStatus();
+        } else {
+          alert('Erro ao fechar: ' + (closeJs.message || ''));
+        }
+      }catch(e){ 
+        console.error(e);
+        alert('Erro ao fechar caixa'); 
+      }
+    }
+
+    async function loadProducts(){
+      try{
+        const res = await fetch(`${API}/products`);
+        const js = await res.json();
+        products = js.products || [];
+        populateCategoryFilter();
+        renderProducts();
+      }catch(e){ console.error(e); }
+    }
+
+    async function loadExtras(){
+      try{
+        const res = await fetch(`${API}/extras`);
+        const js = await res.json();
+        extras = js.extras || [];
+      }catch(e){ console.error(e); }
+    }
+
+    function populateCategoryFilter(){
+      const sel = document.getElementById('filterCategory');
+      const cats = [...new Set(products.map(p=>p.category || 'Outros'))];
+      sel.innerHTML = '<option value="">Todas</option>' + cats.map(c=>`<option value="${c}">${c}</option>`).join('');
+    }
+
+    function renderProducts(){
+      const grid = document.getElementById('productsGrid');
+      const q = (document.getElementById('searchProduct').value || '').toLowerCase();
+      const cat = document.getElementById('filterCategory').value || '';
+      grid.innerHTML = '';
+      const filtered = products.filter(p => (!q || p.name.toLowerCase().includes(q)) && (!cat || p.category === cat));
+      if(!filtered.length){ 
+        grid.innerHTML = `<div class="col-12"><div class="card p-3 small-muted">Nenhum produto</div></div>`; 
+        return; 
+      }
+      filtered.forEach(p => {
+        const col = document.createElement('div'); 
+        col.className = 'col';
+        col.innerHTML = `<div class="card product-card p-3 h-100" data-id="${p.id}">
+          <div class="d-flex justify-content-between">
+            <div><strong>${p.name}</strong><div class="small-muted">${p.category||''}</div></div>
+            <div class="text-end"><div class="text-success fw-bold">R$ ${money(p.price)}</div></div>
+          </div>
+        </div>`;
+        grid.appendChild(col);
+        col.querySelector('.product-card').addEventListener('click', ()=>openCustomModal(p));
+      });
+      togglePDVEnabled(cashOpenState);
+    }
+
+    // === MODAL COM INGREDIENTES REMOVÍVEIS (100% FUNCIONAL) ===
+    function openCustomModal(p){
+      currentProduct = p; 
+      editingIndex = null;
+      document.getElementById('modalTitle').innerText = p.name;
+
+      // === CARREGA INGREDIENTES DO PRODUTO ===
+      let ingredients = [];
+      try {
+        ingredients = JSON.parse(p.ingredients || '[]');
+      } catch(e) {
+        console.warn('Erro ao parsear ingredientes:', p.ingredients);
+      }
+      if (!Array.isArray(ingredients)) ingredients = [];
+
+      const safeOpts = Array.isArray(p.options) ? p.options : [];
+
+      document.getElementById('modalBody').innerHTML = `
+        <div class="mb-2">
+          <label>Quantidade</label>
+          <input id="modalQty" type="number" class="form-control" value="${document.getElementById('qtyDefault').value||1}" min="1"/>
+        </div>
+
+        <!-- INGREDIENTES DO PRODUTO (REMOVÍVEIS) -->
+        ${ingredients.length ? `
+          <div class="mb-3">
+            <label class="form-label">Ingredientes (desmarque para remover)</label>
+            <div class="border p-2 rounded" style="max-height:180px; overflow:auto;">
+              ${ingredients.map(ing => `
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" id="ing_${escapeId(ing)}" checked>
+                  <label class="form-check-label" for="ing_${escapeId(ing)}">${ing}</label>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+
+        <!-- OPÇÕES ANTIGAS (compatibilidade) -->
+        ${safeOpts.length ? `
+          <div class="mb-3">
+            <label class="form-label">Opções (antigo)</label>
+            ${safeOpts.map(o => `
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="opt_${escapeId(o)}" checked>
+                <label class="form-check-label" for="opt_${escapeId(o)}">${o}</label>
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+
+        <!-- EXTRAS GLOBAIS -->
+        <div class="mb-3">
+          <label class="form-label">Extras</label>
+          <div class="border p-2 rounded" style="max-height:180px; overflow:auto;">
+            ${extras.map(e => `
+              <div class="form-check">
+                <input class="form-check-input modal-extra" type="checkbox" id="extra_${e.id}" data-price="${e.price}">
+                <label class="form-check-label" for="extra_${e.id}">${e.name} (+ R$ ${money(e.price)})</label>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <div class="mb-2">
+          <label>Obs</label>
+          <input id="modalObs" class="form-control" placeholder="Ex: sem cebola"/>
+        </div>
+        <div class="small-muted">Preço base: R$ ${money(p.price)}</div>
+      `;
+      modal.show();
+    }
+
+    function addModalToCart(){
+      const qty = Number(document.getElementById('modalQty').value || 1);
+
+      // === INGREDIENTES REMOVIDOS ===
+      let ingredients = [];
+      try { ingredients = JSON.parse(currentProduct.ingredients || '[]'); } catch(e) {}
+      if (!Array.isArray(ingredients)) ingredients = [];
+
+      const removed = ingredients.filter(ing => {
+        const cb = document.getElementById('ing_'+escapeId(ing));
+        return cb && !cb.checked;
+      });
+
+      // === OPÇÕES ANTIGAS REMOVIDAS ===
+      const safeOpts = Array.isArray(currentProduct.options) ? currentProduct.options : [];
+      const removedOld = safeOpts.filter(o => {
+        const cb = document.getElementById('opt_'+escapeId(o));
+        return cb && !cb.checked;
+      });
+
+      // === EXTRAS SELECIONADOS ===
+      const selExtras = Array.from(document.querySelectorAll('.modal-extra:checked')).map(ch => ({
+        id: Number(ch.id.split('_')[1]), 
+        name: ch.nextElementSibling.innerText.split('+')[0].trim(), 
+        price: Number(ch.dataset.price)
+      }));
+
+      const obs = document.getElementById('modalObs').value.trim();
+      const unit = Number(currentProduct.price) + selExtras.reduce((s,e)=>s+Number(e.price),0);
+      const item = { 
+        product_id: currentProduct.id, 
+        name: currentProduct.name, 
+        qty, 
+        base_price: Number(currentProduct.price), 
+        removed_ingredients: [...removed, ...removedOld],
+        extras: selExtras, 
+        observation: obs, 
+        unit_total: unit, 
+        total: unit*qty 
+      };
+
+      if(editingIndex !== null){ 
+        cart[editingIndex] = item; 
+        editingIndex = null; 
+      } else { 
+        cart.push(item); 
+      }
+
+      modal.hide(); 
+      renderCart(); 
+      checkFinalizeEnabled();
+    }
+
+    function renderCart(){
+      const div = document.getElementById('cartItems'); 
+      div.innerHTML = '';
+      if(!cart.length){ 
+        div.innerHTML = '<div class="small-muted">Carrinho vazio</div>'; 
+        updateTotals(); 
+        return; 
+      }
+      cart.forEach((it, i) => {
+        const n = document.createElement('div'); 
+        n.className = 'cart-item';
+        n.innerHTML = `<div class="d-flex justify-content-between">
+          <div><strong>#${i+1} ${it.name}</strong> <small class="text-muted">x${it.qty}</small>
+            ${it.removed_ingredients.length ? `<div class="small-muted">Sem: ${it.removed_ingredients.join(', ')}</div>` : ''}
+            ${it.extras.length ? `<div class="small-muted">${it.extras.map(e=>`+${e.name} (R$${money(e.price)})`).join(' • ')}</div>` : ''}
+            ${it.observation ? `<div class="small-muted">Obs: ${it.observation}</div>` : ''}
+          </div>
+          <div class="text-end"><div class="fw-bold text-success">R$ ${money(it.total)}</div>
+            <div class="mt-2">
+              <button class="btn btn-sm btn-outline-light" onclick="editCartItem(${i})">Editar</button>
+              <button class="btn btn-sm btn-danger" onclick="removeCartItem(${i})">X</button>
+            </div>
+          </div>
+        </div>`;
+        div.appendChild(n);
+      });
+      updateTotals();
+    }
+
+    function editCartItem(i){ 
+      const it = cart[i]; 
+      const p = products.find(x=>x.id===it.product_id); 
+      if(!p) return alert('Erro'); 
+      currentProduct = p; 
+      editingIndex = i; 
+      openCustomModal(p); 
+    }
+
+    function removeCartItem(i){ 
+      if(confirm('Remover?')){ 
+        cart.splice(i,1); 
+        renderCart(); 
+        checkFinalizeEnabled(); 
+      } 
+    }
+
+    function updateTotals(){
+      const total = cart.reduce((s,i)=>s+Number(i.total||0),0);
+      document.getElementById('totalAmount').innerText = 'R$ '+money(total);
+      document.getElementById('cartCount').innerText = cart.length;
+      checkFinalizeEnabled(); 
+      updateChange();
+    }
+
+    function checkFinalizeEnabled(){ 
+      document.getElementById('btnFinalize').disabled = !(cashOpenState && cart.length); 
+      document.getElementById('btnPrint').disabled = !lastOrderId; 
+    }
+
+    function onOrderTypeChange(){ 
+      document.getElementById('addressBlock').style.display = 
+        document.getElementById('orderType').value === 'entrega' ? 'block' : 'none'; 
+    }
+
+    function onPaymentChange(){ 
+      document.getElementById('cashBlock').style.display = 
+        document.getElementById('paymentType').value === 'dinheiro' ? 'block' : 'none'; 
+      updateChange(); 
+    }
+
+    function updateChange(){
+      if(document.getElementById('paymentType').value !== 'dinheiro'){ 
+        document.getElementById('changeInfo').innerText=''; 
+        return; 
+      }
+      const total = cart.reduce((s,i)=>s+Number(i.total||0),0);
+      const rec = Number(document.getElementById('cashReceived').value||0);
+      const troco = rec - total;
+      document.getElementById('changeInfo').innerText = 
+        troco >= 0 ? `Troco: R$ ${money(troco)}` : `Faltam R$ ${money(-troco)}`;
+    }
+
+    function clearCart(){ 
+      if(cart.length && confirm('Limpar?')){ 
+        cart=[]; 
+        lastOrderId=null; 
+        renderCart(); 
+        checkFinalizeEnabled(); 
+      } 
+    }
+
+    async function finalizeSale(){
+      if(!cashOpenState) return alert('Abra o caixa!');
+      if(!cart.length) return alert('Carrinho vazio!');
+
+      const payload = {
+        items: cart.map(it => ({
+          product_id: it.product_id,
+          product_name: it.name,
+          quantity: it.qty,
+          total: it.total,
+          extras: it.extras.map(e=>({name:e.name, price:e.price})),
+          removed_ingredients: it.removed_ingredients || [],
+          note: it.observation || ''
+        })),
+        total: cart.reduce((s,i)=>s+Number(i.total||0),0),
+        type: document.getElementById('orderType').value,
+        customer_name: document.getElementById('clientName').value.trim() || 'Cliente',
+        address: document.getElementById('orderType').value === 'entrega' ? document.getElementById('clientAddress').value.trim() : null,
+        phone: document.getElementById('orderType').value === 'entrega' ? document.getElementById('clientPhone').value.trim() : null,
+        note: document.getElementById('clientNote').value.trim() || null,
+        payment_method: document.getElementById('paymentType').value
+      };
+
+      try{
+        const res = await fetch(`${API}/orders/new`, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify(payload)
+        });
+        const js = await res.json();
+
+        if(js && js.success && js.order && js.order.id){
+          lastOrderId = js.order.id;
+          alert(`Pedido #${lastOrderId} enviado à cozinha!`);
+          document.getElementById('btnPrint').disabled = false;
+          await printComanda();
+          cart = [];
+          renderCart();
+          clearForm();
+          await updateCashReport();
+        } else {
+          alert('Erro ao criar pedido: ' + (js.message || 'Resposta inválida'));
+        }
+      }catch(e){
+        console.error(e);
+        alert('Erro de conexão com o servidor');
+      }
+    }
+
+    function clearForm(){
+      ['clientName','clientNote','clientAddress','clientPhone','cashReceived'].forEach(id => {
+        document.getElementById(id).value = '';
+      });
+      document.getElementById('paymentType').value = 'dinheiro';
+      onPaymentChange();
+    }
+
+    async function printComanda(){
+      if(!lastOrderId) return alert('Nenhum pedido para imprimir');
+      try{
+        const res = await fetch(`${API}/print/order`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order_id: lastOrderId })
+        });
+        const js = await res.json();
+        if(js.success){
+          alert('Comanda impressa com sucesso!');
+        } else {
+          alert('Erro ao imprimir: ' + (js.message || ''));
+        }
+      }catch(e){
+        console.error(e);
+        alert('Falha na impressão');
+      }
+    }
+
+    onOrderTypeChange(); 
+    onPaymentChange();
+  </script>
+</body>
+</html>

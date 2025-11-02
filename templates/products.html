@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cadastro de Produtos - THE RUA BURGUER</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    body { 
+      background: linear-gradient(135deg, #1a1a1a, #0f0f0f); 
+      color: #ffffff !important; 
+      padding: 30px; 
+      font-family: 'Segoe UI', sans-serif;
+    }
+    *, *::placeholder, .form-control, .form-select, option, label, h1, h2, h3, h4, h5, h6, p, span, small, .text-muted {
+      color: #ffffff !important;
+    }
+    .card { 
+      background-color: #2d2d2d; 
+      border: 1px solid #555; 
+      border-radius: 12px; 
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      transition: transform 0.2s;
+    }
+    .card:hover { transform: translateY(-2px); }
+    .btn-custom { background-color: #ffcc00; color: #000; font-weight: bold; border-radius: 8px; border: none; }
+    .btn-custom:hover { background-color: #ffdb4d; transform: scale(1.02); }
+    .btn-edit { background-color: #007bff; color: white; font-size: 0.85em; }
+    .btn-edit:hover { background-color: #0056b3; }
+    .btn-delete { background-color: #dc3545; color: white; font-size: 0.85em; }
+    .btn-delete:hover { background-color: #c82333; }
+    .btn-remove { background-color: #dc3545; color: white; font-size: 0.8em; padding: 2px 6px; }
+    .list-group-item { background-color: #3a3a3a; border: 1px solid #555; color: #fff !important; }
+    .badge { font-size: 0.75em; font-weight: 600; color: #fff !important; }
+    .badge-ingredient { background-color: #6c757d; }
+    .badge-extra { background-color: #198754; }
+    .form-control, .form-select { 
+      background-color: #3a3a3a; 
+      border: 1px solid #666; 
+      color: #fff !important; 
+    }
+    .form-control::placeholder { color: #bbbbbb !important; }
+    .form-control:focus, .form-select:focus { 
+      background-color: #444; 
+      border-color: #ffcc00; 
+      box-shadow: 0 0 0 0.2rem rgba(255, 204, 0, 0.25); 
+    }
+    h2, h4, h5, h6 { color: #ffcc00 !important; }
+    .text-muted { color: #cccccc !important; }
+    select option { background-color: #3a3a3a; color: #fff !important; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Cadastro de Produtos</h2>
+    <p class="text-muted">Defina ingredientes por produto + extras globais</p>
+
+    <!-- EXTRAS GLOBAIS -->
+    <div class="card mt-3">
+      <h5 class="card-title mb-3">Extras Globais (válidos para todos os produtos)</h5>
+      <div id="globalExtrasList" class="list-group mb-3"></div>
+      <div class="row g-2">
+        <div class="col-7">
+          <input id="globalExtraName" type="text" class="form-control form-control-sm" placeholder="Ex: Bacon">
+        </div>
+        <div class="col-3">
+          <input id="globalExtraPrice" type="number" step="0.01" class="form-control form-control-sm" placeholder="R$">
+        </div>
+        <div class="col-2">
+          <button id="btnAddGlobalExtra" class="btn btn-outline-light btn-sm w-100">+ Extra</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- FORMULÁRIO DE PRODUTO -->
+    <div class="card mt-4">
+      <h5 class="card-title mb-3"><span id="formTitle">Novo Produto</span></h5>
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label>Nome</label>
+          <input id="productName" type="text" class="form-control" placeholder="Ex: X-Burguer" />
+        </div>
+        <div class="col-md-3">
+          <label>Preço Base (R$)</label>
+          <input id="productPrice" type="number" step="0.01" class="form-control" placeholder="0.00" />
+        </div>
+        <div class="col-md-3">
+          <label>Categoria</label>
+          <select id="productCategory" class="form-select">
+            <option value="Lanche">Lanche</option>
+            <option value="Bebida">Bebida</option>
+            <option value="Porção">Porção</option>
+            <option value="Sobremesa">Sobremesa</option>
+            <option value="Combo">Combo</option>
+          </select>
+        </div>
+        <div class="col-md-2 d-flex align-items-end gap-1">
+          <button id="btnAddProduct" class="btn btn-custom w-100">Adicionar</button>
+          <button id="btnCancelEdit" class="btn btn-secondary d-none" style="font-size:0.8em;">Cancelar</button>
+        </div>
+      </div>
+
+      <!-- INGREDIENTES DO PRODUTO -->
+      <div class="mt-4">
+        <h6>Ingredientes (o cliente pode remover)</h6>
+        <div id="ingredientsList" class="list-group"></div>
+        <div class="input-group mt-2">
+          <input id="ingredientName" type="text" class="form-control form-control-sm" placeholder="Ex: Alface">
+          <button id="btnAddIngredient" class="btn btn-outline-light btn-sm">+ Ingrediente</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- LISTA DE PRODUTOS -->
+    <div class="mt-5">
+      <h4>Produtos Cadastrados</h4>
+      <div id="productsContainer"></div>
+    </div>
+
+    <div class="mt-4">
+      <a href="/" class="btn btn-secondary">Voltar</a>
+    </div>
+  </div>
+
+  <script>
+    const API_PRODUCTS = '/api/products';
+    const API_EXTRAS = '/api/extras';
+    let currentProduct = { ingredients: [] };
+    let editingId = null;
+    let globalExtras = [];
+
+    // === EXTRAS GLOBAIS ===
+    async function loadGlobalExtras() {
+      try {
+        const res = await fetch(API_EXTRAS);
+        const data = await res.json();
+        globalExtras = data.extras || [];
+        renderGlobalExtras();
+      } catch (err) { console.error(err); }
+    }
+
+    function renderGlobalExtras() {
+      const list = document.getElementById('globalExtrasList');
+      list.innerHTML = globalExtras.map((e, i) => `
+        <div class="list-group-item d-flex justify-content-between align-items-center">
+          <span>${e.name} <small class="text-success">+ R$ ${e.price.toFixed(2)}</small></span>
+          <button class="btn btn-remove" onclick="deleteGlobalExtra(${e.id})">X</button>
+        </div>
+      `).join('');
+    }
+
+    async function addGlobalExtra() {
+      const name = document.getElementById('globalExtraName').value.trim();
+      const price = parseFloat(document.getElementById('globalExtraPrice').value);
+      if (!name || isNaN(price) || price < 0) return alert('Preencha nome e preço');
+      
+      const res = await fetch(API_EXTRAS, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, price })
+      });
+      const data = await res.json();
+      if (data.success) {
+        document.getElementById('globalExtraName').value = '';
+        document.getElementById('globalExtraPrice').value = '';
+        loadGlobalExtras();
+      }
+    }
+
+    async function deleteGlobalExtra(id) {
+      if (!confirm('Excluir extra global?')) return;
+      await fetch(`${API_EXTRAS}/${id}`, { method: 'DELETE' });
+      loadGlobalExtras();
+    }
+
+    // === INGREDIENTES ===
+    function addIngredient() {
+      const name = document.getElementById('ingredientName').value.trim();
+      if (!name) return alert('Digite o ingrediente');
+      currentProduct.ingredients.push(name);
+      renderIngredients();
+      document.getElementById('ingredientName').value = '';
+    }
+
+    function removeIngredient(i) {
+      currentProduct.ingredients.splice(i, 1);
+      renderIngredients();
+    }
+
+    function renderIngredients() {
+      const list = document.getElementById('ingredientsList');
+      list.innerHTML = currentProduct.ingredients.map((ing, i) => `
+        <div class="list-group-item d-flex justify-content-between align-items-center">
+          <span>${ing}</span>
+          <button class="btn btn-remove" onclick="removeIngredient(${i})">X</button>
+        </div>
+      `).join('');
+    }
+
+    // === PRODUTO (AGORA ENVIA OPTIONS, EXTRAS E INGREDIENTS) ===
+    async function addProduct() {
+      const name = document.getElementById('productName').value.trim();
+      const price = parseFloat(document.getElementById('productPrice').value);
+      const category = document.getElementById('productCategory').value;
+
+      if (!name || isNaN(price) || price < 0) return alert('Preencha nome e preço');
+
+      const product = {
+        name,
+        price,
+        category,
+        options: [],  // ADICIONADO
+        extras: [],   // ADICIONADO
+        ingredients: currentProduct.ingredients  // ENVIA ARRAY DIRETO (app.py faz JSON)
+      };
+
+      const method = editingId ? 'PUT' : 'POST';
+      const url = editingId ? `${API_PRODUCTS}/${editingId}` : API_PRODUCTS;
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(product)
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        alert(editingId ? 'Atualizado!' : 'Adicionado!');
+        resetForm();
+        loadProducts();
+      } else {
+        alert(data.message || 'Erro');
+      }
+    }
+
+    function startEdit(p) {
+      editingId = p.id;
+      document.getElementById('formTitle').textContent = 'Editar Produto';
+      document.getElementById('productName').value = p.name;
+      document.getElementById('productPrice').value = p.price;
+      document.getElementById('productCategory').value = p.category;
+
+      let ingredients = [];
+      try {
+        ingredients = JSON.parse(p.ingredients || '[]');
+      } catch (e) { console.warn('Erro ao parsear:', p.ingredients); }
+      currentProduct.ingredients = Array.isArray(ingredients) ? ingredients : [];
+
+      renderIngredients();
+      document.getElementById('btnAddProduct').textContent = 'Salvar';
+      document.getElementById('btnCancelEdit').classList.remove('d-none');
+    }
+
+    function cancelEdit() {
+      editingId = null;
+      resetForm();
+      document.getElementById('formTitle').textContent = 'Novo Produto';
+      document.getElementById('btnAddProduct').textContent = 'Adicionar';
+      document.getElementById('btnCancelEdit').classList.add('d-none');
+    }
+
+    function resetForm() {
+      document.getElementById('productName').value = '';
+      document.getElementById('productPrice').value = '';
+      currentProduct.ingredients = [];
+      renderIngredients();
+    }
+
+    // === LISTA ===
+    async function loadProducts() {
+      try {
+        const res = await fetch(API_PRODUCTS);
+        const data = await res.json();
+        const container = document.getElementById('productsContainer');
+        container.innerHTML = '';
+
+        if (!data.products?.length) {
+          container.innerHTML = '<p class="text-center">Nenhum produto</p>';
+          return;
+        }
+
+        data.products.forEach(p => {
+          let ingredients = [];
+          try {
+            ingredients = JSON.parse(p.ingredients || '[]');
+          } catch (e) { console.warn('Erro ao parsear:', p.ingredients); }
+          if (!Array.isArray(ingredients)) ingredients = [];
+
+          const card = document.createElement('div');
+          card.className = 'card mt-3';
+          card.innerHTML = `
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <h5>${p.name} <small>(${p.category})</small></h5>
+                  <p><strong>Preço:</strong> R$ ${parseFloat(p.price).toFixed(2)}</p>
+                  ${ingredients.length ? `
+                    <p><strong>Ingredientes:</strong></p>
+                    <div class="ms-3">${ingredients.map(i => 
+                      `<span class="badge badge-ingredient me-1">${i}</span>`
+                    ).join('')}</div>
+                  ` : ''}
+                  <p class="text-success mt-2"><small>Extras globais disponíveis</small></p>
+                </div>
+                <div class="d-flex flex-column gap-1">
+                  <button class="btn btn-edit btn-sm" onclick='startEdit(${JSON.stringify(p).replace(/'/g, "\\'")})'>Editar</button>
+                  <button class="btn btn-delete btn-sm" onclick="deleteProduct(${p.id})">Excluir</button>
+                </div>
+              </div>
+            </div>
+          `;
+          container.appendChild(card);
+        });
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function deleteProduct(id) {
+      if (!confirm('Excluir produto?')) return;
+      await fetch(`${API_PRODUCTS}/${id}`, { method: 'DELETE' });
+      loadProducts();
+    }
+
+    // === EVENTOS ===
+    document.getElementById('btnAddGlobalExtra').onclick = addGlobalExtra;
+    document.getElementById('btnAddIngredient').onclick = addIngredient;
+    document.getElementById('btnAddProduct').onclick = addProduct;
+    document.getElementById('btnCancelEdit').onclick = cancelEdit;
+
+    ['globalExtraName', 'globalExtraPrice', 'ingredientName'].forEach(id => {
+      document.getElementById(id).addEventListener('keypress', e => {
+        if (e.key === 'Enter') {
+          if (id.includes('global')) addGlobalExtra();
+          else addIngredient();
+        }
+      });
+    });
+
+    loadGlobalExtras();
+    loadProducts();
+  </script>
+</body>
+</html>

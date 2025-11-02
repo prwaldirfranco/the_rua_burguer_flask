@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cozinha - THE RUA BURGUER</title>
+
+  <!-- Bootstrap 5 + Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet" />
+
+  <style>
+    :root {
+      --primary: #ffcc00;
+      --primary-hover: #ffdb4d;
+      --dark: #121212;
+      --card-bg: #1f1f1f;
+      --border: #333;
+      --text: #f8f9fa;
+    }
+
+    body {
+      background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
+      color: var(--text);
+      min-height: 100vh;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      padding: 40px 20px;
+    }
+
+    h2 {
+      font-weight: 800;
+      font-size: 2.4rem;
+      background: linear-gradient(90deg, #ffcc00, #ff9900);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 1.5rem;
+    }
+
+    .card-order {
+      background-color: var(--card-bg);
+      border: 1.5px solid var(--border);
+      border-radius: 16px;
+      padding: 1.6rem;
+      margin-bottom: 1.2rem;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.4);
+      transition: all 0.3s ease;
+    }
+
+    .card-order:hover {
+      transform: translateY(-6px);
+      border-color: var(--primary);
+      box-shadow: 0 12px 25px rgba(255,204,0,0.2);
+    }
+
+    .order-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.8rem;
+    }
+
+    .order-id {
+      font-weight: 700;
+      font-size: 1.3rem;
+      color: var(--primary);
+    }
+
+    .order-time {
+      font-size: 0.9rem;
+      color: #aaa;
+    }
+
+    .items-list {
+      font-size: 1rem;
+      margin: 0.8rem 0;
+      color: #ddd;
+      line-height: 1.5;
+    }
+
+    .item-line {
+      display: block;
+      margin-bottom: 0.4rem;
+      font-weight: 500;
+    }
+
+    .extra { color: #8fd19e; font-size: 0.9rem; }
+    .removed { color: #f28b82; font-size: 0.9rem; }
+    .note { color: #ffd43b; font-size: 0.9rem; }
+
+    .total-price {
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .status-badge {
+      font-weight: 600;
+      font-size: 0.9rem;
+      padding: 0.35rem 0.7rem;
+      border-radius: 50px;
+    }
+
+    .status-preparo { background: #ffc107; color: #000; }
+    .status-pronto { background: #28a745; color: #fff; }
+
+    .btn-ready {
+      background-color: #28a745;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      padding: 0.6rem 1.2rem;
+      font-weight: 600;
+      font-size: 0.95rem;
+      transition: all 0.2s;
+    }
+
+    .btn-ready:hover {
+      background-color: #218838;
+      transform: translateY(-1px);
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: #777;
+    }
+
+    .empty-state i {
+      font-size: 3.5rem;
+      color: #444;
+      margin-bottom: 1rem;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 18px;
+      height: 18px;
+      border: 2px solid #444;
+      border-top: 2px solid var(--primary);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-right: 8px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @media (max-width: 576px) {
+      h2 { font-size: 2rem; }
+      .card-order { padding: 1.2rem; }
+      .order-id { font-size: 1.1rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h2 class="text-center mb-4">
+      Painel da Cozinha
+    </h2>
+
+    <p id="status" class="text-center text-info fs-5 mb-4">
+      <span class="spinner"></span> Carregando pedidos...
+    </p>
+
+    <div id="kitchenOrders"></div>
+
+    <div class="mt-4 text-center">
+      <a href="/" class="btn btn-outline-light px-4">
+        Voltar
+      </a>
+    </div>
+  </div>
+
+  <script>
+    const API = '/api'; // Usa caminho relativo (mesmo servidor)
+
+    // Formatação
+    const formatTime = iso => {
+      if (!iso) return '--:--';
+      return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    };
+
+    const formatMoney = v => `R$ ${parseFloat(v || 0).toFixed(2).replace('.', ',')}`;
+
+    // Carrega pedidos da cozinha
+    async function loadKitchenOrders() {
+      const container = document.getElementById('kitchenOrders');
+      const statusEl = document.getElementById('status');
+
+      try {
+        const res = await fetch(`${API}/orders`, { cache: 'no-store' });
+        const data = await res.json();
+        const orders = data.orders || [];
+
+        // Filtra apenas "preparing" e "ready"
+        const kitchenOrders = orders.filter(o => 
+          ['preparing', 'ready'].includes(o.status)
+        );
+
+        // Atualiza contador
+        const preparingCount = kitchenOrders.filter(o => o.status === 'preparing').length;
+        statusEl.innerHTML = `<i class="bi bi-fire text-warning"></i> ${preparingCount} pedido(s) em produção`;
+
+        container.innerHTML = '';
+
+        if (!kitchenOrders.length) {
+          container.innerHTML = `
+            <div class="empty-state">
+              <i class="bi bi-emoji-neutral"></i>
+              <p class="mb-0">Nenhum pedido em produção.</p>
+              <small class="text-muted">Aguardando novos pedidos...</small>
+            </div>
+          `;
+          return;
+        }
+
+        // Ordena: preparing primeiro, depois ready
+        kitchenOrders.sort((a, b) => {
+          if (a.status === b.status) {
+            return new Date(a.created_at) - new Date(b.created_at);
+          }
+          return a.status === 'preparing' ? -1 : 1;
+        });
+
+        kitchenOrders.forEach(order => {
+          const card = document.createElement('div');
+          card.className = 'card-order';
+
+          // Itens formatados
+          const itemsHTML = (order.items || []).map(item => {
+            let line = `<span class="item-line">${item.quantity}x ${item.product_name}</span>`;
+            if (item.extras && item.extras.length) {
+              line += `<br><span class="extra">+ ${item.extras.map(e => e.name).join(', ')}</span>`;
+            }
+            if (item.removed_ingredients && item.removed_ingredients.length) {
+              line += `<br><span class="removed">Sem: ${item.removed_ingredients.join(', ')}</span>`;
+            }
+            if (item.note) {
+              line += `<br><span class="note">Obs: ${item.note}</span>`;
+            }
+            return line;
+          }).join('<hr style="margin:0.5rem 0; border-color:#444">');
+
+          const statusText = order.status === 'preparing' ? 'Em preparo' : 'Pronto';
+          const badgeClass = order.status === 'preparing' ? 'status-preparo' : 'status-pronto';
+
+          card.innerHTML = `
+            <div class="order-header">
+              <div class="order-id">#${order.id} - ${order.customer_name || 'Cliente'}</div>
+              <div class="order-time">${formatTime(order.created_at)}</div>
+            </div>
+
+            <div class="items-list">${itemsHTML || 'Sem itens'}</div>
+
+            ${order.type === 'entrega' && order.address ? `
+              <div class="mt-2 small text-info">
+                <i class="bi bi-geo-alt"></i> ${order.address}
+                ${order.phone ? ` • <i class="bi bi-phone"></i> ${order.phone}` : ''}
+              </div>
+            ` : ''}
+
+            ${order.note ? `<div class="mt-2 small text-warning"><i class="bi bi-chat-dots"></i> ${order.note}</div>` : ''}
+
+            <div class="d-flex justify-content-between align-items-center mt-3">
+              <div>
+                <span class="total-price">${formatMoney(order.total)}</span>
+              </div>
+              <div>
+                <span class="status-badge ${badgeClass}">${statusText}</span>
+              </div>
+            </div>
+
+            ${order.status === 'preparing' ? `
+              <div class="text-end mt-3">
+                <button class="btn-ready" onclick="markAsReady(${order.id})">
+                  <i class="bi bi-check-lg"></i> Marcar como Pronto
+                </button>
+              </div>
+            ` : ''}
+          `;
+
+          container.appendChild(card);
+        });
+      } catch (err) {
+        console.error('Erro ao carregar cozinha:', err);
+        statusEl.innerHTML = `<span class="text-danger"><i class="bi bi-exclamation-triangle"></i> Erro ao conectar</span>`;
+        container.innerHTML = `<p class="text-danger text-center">Falha ao carregar pedidos.</p>`;
+      }
+    }
+
+    // Marca como pronto
+    async function markAsReady(id) {
+      if (!confirm(`Marcar Pedido #${id} como PRONTO?`)) return;
+
+      try {
+        const res = await fetch(`${API}/orders/${id}/ready`, { method: 'POST' });
+        const data = await res.json();
+
+        if (data.success) {
+          // Som de notificação (opcional)
+          const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJ...');
+          audio.play().catch(() => {});
+
+          loadKitchenOrders();
+        } else {
+          throw new Error(data.message || 'Erro desconhecido');
+        }
+      } catch (err) {
+        alert('Erro: ' + (err.message || 'Falha na comunicação'));
+      }
+    }
+
+    // Atualização automática a cada 3 segundos
+    loadKitchenOrders();
+    setInterval(loadKitchenOrders, 3000);
+  </script>
+</body>
+</html>

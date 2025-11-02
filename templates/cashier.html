@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Painel do Caixa - THE RUA BURGUER</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet" />
+
+  <style>
+    body { background:#121212; color:#fff; padding:40px 20px; font-family:'Segoe UI',Tahoma,sans-serif; }
+    h2 { font-weight:800; font-size:2.4rem; background:linear-gradient(90deg,#ffcc00,#ff9900);
+         -webkit-background-clip:text; -webkit-text-fill-color:transparent; margin-bottom:1.5rem; }
+    .card-module { background:#1f1f1f; border:1px solid #333; border-radius:16px; padding:1.8rem;
+                   box-shadow:0 6px 16px rgba(0,0,0,0.4); transition:all .3s ease; }
+    .card-module:hover { transform:translateY(-6px); border-color:#ffcc00; }
+    .btn-danger-custom { background:#dc3545; border:none; }
+    .btn-danger-custom:hover { background:#c82333; }
+    .btn-success-custom { background:#28a745; border:none; }
+    .btn-success-custom:hover { background:#218838; }
+    .status-open { color:#28a745; }
+    .status-closed { color:#dc3545; }
+    .summary-box { background:#181818; border:1px solid #444; border-radius:12px; padding:1rem; }
+    .spinner { display:inline-block; width:16px; height:16px; border:2px solid #444;
+               border-top:2px solid #ffcc00; border-radius:50%; animation:spin 1s linear infinite; margin-right:6px; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    @media print {
+      body { background:#fff; color:#000; }
+      .no-print { display:none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2 class="text-center mb-4">Painel do Caixa</h2>
+
+    <p id="status" class="text-center fs-5 mb-4"><span class="spinner"></span> Carregando...</p>
+
+    <div class="card-module mb-4 no-print">
+      <h4 class="mb-3">Ações</h4>
+      <div class="row g-3 align-items-end">
+        <div class="col-md-5">
+          <label for="openAmount" class="form-label">Valor de abertura (R$)</label>
+          <input id="openAmount" class="form-control" type="number" step="0.01" min="0" placeholder="0,00">
+        </div>
+        <div class="col-md-3">
+          <button id="btnOpen" class="btn btn-success-custom w-100">Abrir Caixa</button>
+        </div>
+        <div class="col-md-4">
+          <button id="btnClose" class="btn btn-danger-custom w-100">Fechar Caixa</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card-module">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0">Resumo do Caixa</h4>
+        <button id="btnPrintSummary" class="btn btn-sm btn-outline-light d-none">Imprimir Comanda</button>
+      </div>
+      <div id="summary" class="summary-box">Nenhum caixa aberto.</div>
+    </div>
+
+    <div class="mt-4 text-center no-print">
+      <a href="/" class="btn btn-outline-light px-4">Voltar</a>
+    </div>
+  </div>
+
+  <script>
+    const API = 'http://localhost:5000/api';
+    const formatMoney = v => `R$ ${parseFloat(v||0).toFixed(2).replace('.',',')}`;
+    const formatDate = d => d ? new Date(d).toLocaleString('pt-BR') : '-';
+    let currentCash = null;
+    let currentOrders = [];
+
+    async function refreshCash(){
+      const statusEl = document.getElementById('status');
+      const summaryEl = document.getElementById('summary');
+      const btnPrint = document.getElementById('btnPrintSummary');
+
+      try{
+        const cashRes = await fetch(`${API}/cash/status`);
+        const cashData = await cashRes.json();
+
+        if(cashData?.is_open && cashData.cash){
+          currentCash = cashData.cash;
+
+          const ordersRes = await fetch(`${API}/orders`);
+          const ordersData = await ordersRes.json();
+          const orders = ordersData.orders || [];
+          currentOrders = orders;
+
+          const openedAt = new Date(currentCash.opened_at);
+          const closedAt = currentCash.closed_at ? new Date(currentCash.closed_at) : new Date();
+
+          const filteredOrders = orders.filter(o => {
+            const date = new Date(o.created_at);
+            return date >= openedAt && date <= closedAt;
+          });
+
+          const totalVendas = filteredOrders.reduce((sum, o) => sum + (Number(o.total)||0), 0);
+
+          statusEl.innerHTML = `Status: <span class="status-open">Aberto</span> (Caixa #${currentCash.id})`;
+
+          summaryEl.innerHTML = `
+            <strong>Usuário:</strong> ${currentCash.user_id || 'N/A'}<br>
+            <strong>Aberto em:</strong> ${formatDate(currentCash.opened_at)}<br>
+            <strong>Valor inicial:</strong> ${formatMoney(currentCash.opening_amount)}<br>
+            <strong>Pedidos:</strong> ${filteredOrders.length}<br>
+            <strong>Total em vendas:</strong> ${formatMoney(totalVendas)}<br><br>
+          `;
+
+          btnPrint.classList.remove('d-none');
+        } else {
+          currentCash = null;
+          statusEl.innerHTML = `Status: <span class="status-closed">Fechado</span>`;
+          summaryEl.innerText = 'Nenhum caixa aberto.';
+          btnPrint.classList.add('d-none');
+        }
+      }catch(err){
+        console.error('Erro ao carregar caixa:', err);
+        statusEl.innerHTML = `<span class="status-error">Erro de conexão</span>`;
+        summaryEl.innerText = 'Não foi possível conectar ao servidor.';
+      }
+    }
+
+    async function openCash(){
+      const amount = parseFloat(document.getElementById('openAmount').value) || 0;
+      try{
+        const res = await fetch(`${API}/cash/open`, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({ opening_amount: amount })
+        });
+        const data = await res.json();
+        alert(data.message || 'Caixa aberto!');
+        refreshCash();
+      }catch(err){ alert('Erro ao abrir caixa.'); }
+    }
+
+    async function closeCash(){
+      if(!confirm('Fechar caixa?')) return;
+      try{
+        const res = await fetch(`${API}/cash/close`, { method:'POST', headers:{'Content-Type':'application/json'} });
+        const data = await res.json();
+        alert(data.message || 'Caixa fechado!');
+        refreshCash();
+      }catch(err){ alert('Erro ao fechar caixa.'); }
+    }
+
+    // ✅ Impressão estilo COMANDA (80mm térmica)
+    function printCashSummary(){
+      if(!currentCash) return alert('Nenhum caixa aberto.');
+
+      const pedidosPrint = currentOrders.map(o => `
+        <div style="margin-bottom:8px; border-bottom:1px dashed #000; padding-bottom:4px;">
+          <strong>Pedido #${o.id}</strong><br>
+          Cliente: ${o.client_name || 'Não informado'}<br>
+          Total: ${formatMoney(o.total)}<br>
+          Data: ${formatDate(o.created_at)}<br>
+        </div>
+      `).join('');
+
+      const printWindow = window.open('', '', 'width=400,height=600');
+      printWindow.document.write(`
+        <html>
+        <head>
+          <title>Comanda - THE RUA BURGUER</title>
+          <style>
+            @page { size: 80mm auto; margin: 2mm; }
+            body { font-family: "Courier New", monospace; font-size: 12px; }
+            h2 { text-align: center; margin-bottom: 4px; }
+            .linha { border-top: 1px dashed #000; margin: 4px 0; }
+            .center { text-align:center; }
+            .total { font-weight: bold; font-size: 13px; }
+          </style>
+        </head>
+        <body>
+          <h2>THE RUA BURGUER</h2>
+          <div class="center">Resumo de Caixa</div>
+          <div class="linha"></div>
+          <p>
+            Caixa: #${currentCash.id}<br>
+            Usuário: ${currentCash.user_id || 'N/A'}<br>
+            Abertura: ${formatDate(currentCash.opened_at)}<br>
+            Valor Inicial: ${formatMoney(currentCash.opening_amount)}<br>
+          </p>
+          <div class="linha"></div>
+          <p><strong>Pedidos:</strong></p>
+          ${pedidosPrint}
+          <div class="linha"></div>
+          <p class="total">
+            Total de Pedidos: ${currentOrders.length}<br>
+            Total Vendido: ${formatMoney(currentOrders.reduce((s,o)=>s+(Number(o.total)||0),0))}
+          </p>
+          <div class="linha"></div>
+          <div class="center">*** FIM DA COMANDA ***</div>
+          <script>window.print();<\/script>
+        </body>
+        </html>
+      `);
+      printWindow.document.close();
+    }
+
+    document.getElementById('btnOpen').addEventListener('click', openCash);
+    document.getElementById('btnClose').addEventListener('click', closeCash);
+    document.getElementById('btnPrintSummary').addEventListener('click', printCashSummary);
+
+    refreshCash();
+    setInterval(refreshCash, 5000);
+  </script>
+</body>
+</html>
